@@ -1,14 +1,17 @@
+// =============================================================
+// FILE: lib/ui/home_screen.dart
+// =============================================================
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:drive_sync_app/controllers/home_controller.dart';
 import 'package:drive_sync_app/models/tracked_file.dart';
 import 'package:drive_sync_app/ui/widgets/action_button.dart';
+import 'package:drive_sync_app/ui/widgets/file_status_tile.dart';
 import 'package:drive_sync_app/ui/widgets/stat_card.dart';
 import 'package:drive_sync_app/utils/app_colors.dart';
 
 class HomeScreen extends StatelessWidget {
   final HomeController controller = Get.put(HomeController());
-
   HomeScreen({super.key});
 
   @override
@@ -17,20 +20,19 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Drive Sync'),
         actions: [
-          Obx(() {
-            if (controller.currentUser.value != null) {
-              return IconButton(
-                icon: const Icon(Icons.logout),
-                onPressed: controller.handleSignOut,
-                tooltip: 'Sign Out',
-              );
-            }
-            return const SizedBox.shrink();
-          }),
+          Obx(
+            () => controller.currentUser.value != null
+                ? IconButton(
+                    icon: const Icon(Icons.logout),
+                    onPressed: controller.handleSignOut,
+                    tooltip: 'Sign Out',
+                  )
+                : const SizedBox.shrink(),
+          ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -41,6 +43,26 @@ class HomeScreen extends StatelessWidget {
             _buildActionButtons(),
             const SizedBox(height: 16),
             _buildActivityIndicator(),
+            const SizedBox(height: 16),
+            // **NEW:** Header for the file list with a toggle button.
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("File Queue", style: Get.textTheme.titleMedium),
+                TextButton(
+                  onPressed: controller.toggleShowFailedOnly,
+                  child: Obx(
+                    () => Text(
+                      controller.showFailedOnly.value
+                          ? 'Show All Files'
+                          : 'Show Failed Files',
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const Divider(),
+            _buildFileStatusList(),
           ],
         ),
       ),
@@ -143,9 +165,9 @@ class HomeScreen extends StatelessWidget {
       () => Column(
         children: [
           ActionButton(
-            label: 'Start File Scan',
+            label: 'Pick Folder & Scan',
             icon: Icons.folder_open,
-            onPressed: controller.handleScan,
+            onPressed: controller.handlePickAndScan,
             isEnabled: controller.currentUser.value != null,
           ),
           const SizedBox(height: 16),
@@ -156,6 +178,28 @@ class HomeScreen extends StatelessWidget {
             isEnabled: controller.currentUser.value != null,
             backgroundColor: AppColors.accent,
           ),
+          const SizedBox(height: 16),
+          // **NEW:** Button to re-upload failed files.
+          ActionButton(
+            label: 'Re-upload Failed Files',
+            icon: Icons.refresh,
+            onPressed: controller.handleReuploadFailed,
+            isEnabled: (controller.statusCounts[FileStatus.failed] ?? 0) > 0,
+            backgroundColor: AppColors.warning,
+          ),
+          const SizedBox(height: 16),
+          // **NEW:** Button to delete all files.
+          ActionButton(
+            label: 'Delete All Files',
+            icon: Icons.delete_forever,
+            onPressed: controller.handleDeleteAllFiles,
+            isEnabled:
+                (controller.statusCounts[FileStatus.pending] ?? 0) > 0 ||
+                (controller.statusCounts[FileStatus.uploading] ?? 0) > 0 ||
+                (controller.statusCounts[FileStatus.completed] ?? 0) > 0 ||
+                (controller.statusCounts[FileStatus.failed] ?? 0) > 0,
+            backgroundColor: AppColors.error,
+          ),
         ],
       ),
     );
@@ -165,10 +209,7 @@ class HomeScreen extends StatelessWidget {
     return Obx(() {
       final isScanning = controller.isScanning.value;
       final isUploading = controller.isUploading.value;
-
-      if (!isScanning && !isUploading) {
-        return const Center(child: Text('Idle'));
-      }
+      if (!isScanning && !isUploading) return const Center(child: Text('Idle'));
 
       return Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -184,6 +225,23 @@ class HomeScreen extends StatelessWidget {
             style: Get.textTheme.bodyMedium,
           ),
         ],
+      );
+    });
+  }
+
+  Widget _buildFileStatusList() {
+    return Obx(() {
+      if (controller.allFiles.isEmpty) {
+        return const Center(child: Text('Scan a folder to see files here.'));
+      }
+      return ListView.builder(
+        itemCount: controller.allFiles.length,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemBuilder: (context, index) {
+          final file = controller.allFiles[index];
+          return FileStatusTile(file: file);
+        },
       );
     });
   }

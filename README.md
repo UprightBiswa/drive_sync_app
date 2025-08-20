@@ -22,7 +22,7 @@ This app requires Google Drive API credentials to function.
     * Go to "APIs & Services" > "Credentials".
     * Click "Create Credentials" > "OAuth client ID".
     * Select **Android** as the application type.
-    * Provide a name and the **Package Name** of your app (e.g., `com.example.drive_sync_app`).
+    * Provide a name and the **Package Name** of your app (e.g., `com.drive.drive_sync_app`).
     * **Generate SHA-1 Fingerprint:** You need to provide the SHA-1 fingerprint of your debug keystore. Open a terminal and run:
         ```bash
         # For macOS/Linux

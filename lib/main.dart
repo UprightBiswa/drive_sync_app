@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:drive_sync_app/services/background_service.dart';
@@ -9,6 +8,8 @@ import 'package:drive_sync_app/services/permission_service.dart';
 import 'package:drive_sync_app/services/upload_manager_service.dart';
 import 'package:drive_sync_app/ui/home_screen.dart';
 import 'package:drive_sync_app/utils/app_theme.dart';
+
+import 'services/notification_service.dart';
 
 Future<void> main() async {
   // Ensure Flutter bindings are initialized
@@ -26,6 +27,7 @@ Future<void> main() async {
 // Dependency injection for all our services
 Future<void> initServices() async {
   Get.put(PermissionService());
+  await Get.putAsync(() => NotificationService().init());
   await Get.putAsync(() => DatabaseService().init());
   Get.put(GoogleDriveService());
   Get.put(FileScannerService());

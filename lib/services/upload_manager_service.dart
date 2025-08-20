@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:pool/pool.dart';
 import 'package:drive_sync_app/models/tracked_file.dart';
@@ -9,59 +10,74 @@ class UploadManagerService {
   final DatabaseService _dbService = Get.find();
   final GoogleDriveService _driveService = Get.find();
   final RxBool isUploading = false.obs;
-
-  // Create a pool to limit concurrent uploads to 4
   final _pool = Pool(4);
 
-  Future<void> processUploadQueue() async {
+  Future<int> processUploadQueue() async {
     if (isUploading.value || _driveService.currentUser.value == null) {
-      print("Upload process already running or user not logged in.");
-      return;
+      debugPrint(
+        "Upload process skipped: already running or user not logged in.",
+      );
+      return 0;
     }
 
+    int successCount = 0;
     isUploading.value = true;
     try {
       final pendingFiles = await _dbService.getFilesByStatus(
         FileStatus.pending,
       );
       if (pendingFiles.isEmpty) {
-        print("No pending files to upload.");
-        return;
+        debugPrint("No pending files to upload.");
+        return 0;
       }
 
-      print("Starting upload for ${pendingFiles.length} files.");
-
-      final uploadTasks = <Future>[];
-      for (final file in pendingFiles) {
-        uploadTasks.add(_pool.withResource(() => _uploadSingleFile(file)));
+      debugPrint("Starting upload for ${pendingFiles.length} files.");
+      await for (final success in _pool.forEach(
+        pendingFiles,
+        _uploadSingleFile,
+      )) {
+        if (success) successCount++;
       }
-
-      // Wait for all tasks in the pool to complete
-      await Future.wait(uploadTasks);
-    } catch (e) {
-      print("Error processing upload queue: $e");
+    } catch (e, s) {
+      debugPrint("Error processing upload queue: $e\n$s");
     } finally {
       isUploading.value = false;
-      print("Upload queue processing finished.");
+      debugPrint("Upload queue finished. Successes: $successCount");
     }
+    return successCount;
   }
 
-  Future<void> _uploadSingleFile(TrackedFile trackedFile) async {
+  // **NEW:** Method to handle re-uploading failed files.
+  Future<void> reuploadFailedFiles() async {
+    final failedFiles = await _dbService.getFilesByStatus(FileStatus.failed);
+    for (var file in failedFiles) {
+      await _dbService.updateFileStatus(file.id, FileStatus.pending);
+    }
+    await processUploadQueue();
+  }
+
+  Future<bool> _uploadSingleFile(TrackedFile trackedFile) async {
     try {
       await _dbService.updateFileStatus(trackedFile.id, FileStatus.uploading);
 
       final file = File(trackedFile.path);
       if (!await file.exists()) {
+        debugPrint("Upload failed: File does not exist at ${trackedFile.path}");
         await _dbService.updateFileStatus(trackedFile.id, FileStatus.failed);
-        return;
+        return false;
       }
 
       final success = await _driveService.uploadFile(file);
-      final newStatus = success ? FileStatus.completed : FileStatus.failed;
-      await _dbService.updateFileStatus(trackedFile.id, newStatus);
-    } catch (e) {
-      print("Failed to upload file ${trackedFile.path}: $e");
+      await _dbService.updateFileStatus(
+        trackedFile.id,
+        success ? FileStatus.completed : FileStatus.failed,
+      );
+      return success;
+    } catch (e, s) {
+      // **DETAILED LOGGING**
+      debugPrint("Critical error uploading ${trackedFile.path}: $e\n$s");
       await _dbService.updateFileStatus(trackedFile.id, FileStatus.failed);
+      return false;
     }
   }
 }

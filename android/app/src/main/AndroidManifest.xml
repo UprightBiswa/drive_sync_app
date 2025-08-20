@@ -9,6 +9,9 @@
     <!-- Required for Android 11 (API 30) and above to access all files -->
     <!-- You also need to handle this permission request at runtime -->
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+    <!-- NEW: Required for Android 13 (API 33) and above for notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
 
     <application
         android:label="drive_sync_app"

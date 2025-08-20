@@ -1,4 +1,4 @@
-package com.example.drive_sync_app
+package com.drive.drive_sync_app
 
 import io.flutter.embedding.android.FlutterActivity
 

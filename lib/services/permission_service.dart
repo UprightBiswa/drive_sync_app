@@ -6,7 +6,7 @@ class PermissionService {
     if (await Permission.manageExternalStorage.isGranted) {
       return true;
     }
-    
+
     var status = await Permission.manageExternalStorage.request();
     if (status.isGranted) {
       return true;
@@ -18,5 +18,10 @@ class PermissionService {
     }
     status = await Permission.storage.request();
     return status.isGranted;
+  }
+
+  Future<bool> requestNotificationPermission() async {
+    if (await Permission.notification.isGranted) return true;
+    return (await Permission.notification.request()).isGranted;
   }
 }

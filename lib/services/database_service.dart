@@ -50,10 +50,27 @@ class DatabaseService {
         .toList();
   }
 
+   // **NEW:** A method to delete all files from the database.
+  Future<void> deleteAllFiles() async {
+    await _store.delete(_db);
+  }
+
+
   Future<int> countFilesByStatus(FileStatus status) async {
     final finder = Finder(filter: Filter.equals('status', status.toString()));
     // **FIXED**: Using the modern, recommended query API for counting.
     return await _store.query(finder: finder).count(_db);
+  }
+
+  // NEW: Stream for the UI file list
+  Stream<List<TrackedFile>> getAllFilesStream() {
+    // Sort by creation time, newest first
+    final finder = Finder(sortOrders: [SortOrder('createdAt', false)]);
+    return _store.query(finder: finder).onSnapshots(_db).map((snapshots) {
+      return snapshots
+          .map((snapshot) => TrackedFile.fromJson(snapshot.key, snapshot.value))
+          .toList();
+    });
   }
 
   Future<void> updateFileStatus(int id, FileStatus status) async {

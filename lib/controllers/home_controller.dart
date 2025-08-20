@@ -1,3 +1,6 @@
+// =============================================================
+// FILE: lib/controllers/home_controller.dart
+// =============================================================
 import 'package:get/get.dart';
 import 'package:drive_sync_app/models/tracked_file.dart';
 import 'package:drive_sync_app/services/database_service.dart';
@@ -14,25 +17,28 @@ class HomeController extends GetxController {
   final UploadManagerService _uploadManagerService = Get.find();
   final DatabaseService _dbService = Get.find();
 
-  // Reactive state variables
   final Rx<GoogleSignInAccount?> currentUser = Rx<GoogleSignInAccount?>(null);
   final RxBool isScanning = false.obs;
   final RxBool isUploading = false.obs;
-  final RxMap<FileStatus, int> statusCounts = RxMap<FileStatus, int>({
-    FileStatus.pending: 0,
-    FileStatus.uploading: 0,
-    FileStatus.completed: 0,
-    FileStatus.failed: 0,
-  });
+  final RxMap<FileStatus, int> statusCounts = RxMap<FileStatus, int>({});
+  
+  // **NEW:** State to control the file list view.
+  final RxBool showFailedOnly = false.obs;
+  
+  // **UPDATED:** A computed list that reacts to the showFailedOnly state.
+  RxList<TrackedFile> allFiles = <TrackedFile>[].obs;
 
   @override
   void onInit() {
     super.onInit();
-    // Bind controller state to service state
     currentUser.bindStream(_googleDriveService.currentUser.stream);
     isScanning.bindStream(_fileScannerService.isScanning.stream);
     isUploading.bindStream(_uploadManagerService.isUploading.stream);
     statusCounts.bindStream(_dbService.getStatusCountsStream());
+    
+    // **NEW:** The file list now depends on the `showFailedOnly` toggle.
+    ever(showFailedOnly, (_) => _updateFileList());
+    _updateFileList(); // Initial load
 
     // Automatically start upload process when user logs in
     ever(currentUser, (account) {
@@ -40,6 +46,31 @@ class HomeController extends GetxController {
         _uploadManagerService.processUploadQueue();
       }
     });
+  }
+
+  // **NEW:** Method to update the file list based on the toggle.
+  void _updateFileList() async {
+    if (showFailedOnly.value) {
+      allFiles.value = await _dbService.getFilesByStatus(FileStatus.failed);
+    } else {
+      allFiles.bindStream(_dbService.getAllFilesStream());
+    }
+  }
+
+  // **NEW:** Method to toggle the file list view.
+  void toggleShowFailedOnly() {
+    showFailedOnly.value = !showFailedOnly.value;
+  }
+
+  // **NEW:** Handles the re-upload of failed files.
+  void handleReuploadFailed() {
+    _uploadManagerService.reuploadFailedFiles();
+  }
+
+  // **NEW:** Handles the deletion of all files from the database.
+  void handleDeleteAllFiles() {
+    _dbService.deleteAllFiles();
+    Get.snackbar('Files Deleted', 'All tracked files have been removed from the list.');
   }
 
   Future<void> handleSignIn() async {
@@ -50,16 +81,14 @@ class HomeController extends GetxController {
     await _googleDriveService.signOut();
   }
 
-  Future<void> handleScan() async {
-    final hasPermission = await _permissionService.requestStoragePermission();
-    if (hasPermission) {
-      await _fileScannerService.startScan();
-    } else {
-      Get.snackbar(
-        'Permission Denied',
-        'Storage permission is required to scan files.',
-      );
+  Future<void> handlePickAndScan() async {
+    final hasStoragePerm = await _permissionService.requestStoragePermission();
+    if (!hasStoragePerm) {
+      Get.snackbar('Permission Denied', 'Storage permission is required to scan files.');
+      return;
     }
+    await _permissionService.requestNotificationPermission();
+    await _fileScannerService.pickAndScanFolder();
   }
 
   void handleUpload() {
