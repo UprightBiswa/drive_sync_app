@@ -1,6 +1,4 @@
-// =============================================================
-// FILE: lib/controllers/home_controller.dart
-// =============================================================
+
 import 'package:get/get.dart';
 import 'package:drive_sync_app/models/tracked_file.dart';
 import 'package:drive_sync_app/services/database_service.dart';
@@ -22,10 +20,10 @@ class HomeController extends GetxController {
   final RxBool isUploading = false.obs;
   final RxMap<FileStatus, int> statusCounts = RxMap<FileStatus, int>({});
   
-  // **NEW:** State to control the file list view.
+  //State to control the file list view.
   final RxBool showFailedOnly = false.obs;
   
-  // **UPDATED:** A computed list that reacts to the showFailedOnly state.
+  //  A computed list that reacts to the showFailedOnly state.
   RxList<TrackedFile> allFiles = <TrackedFile>[].obs;
 
   @override
@@ -36,7 +34,7 @@ class HomeController extends GetxController {
     isUploading.bindStream(_uploadManagerService.isUploading.stream);
     statusCounts.bindStream(_dbService.getStatusCountsStream());
     
-    // **NEW:** The file list now depends on the `showFailedOnly` toggle.
+    // The file list now depends on the `showFailedOnly` toggle.
     ever(showFailedOnly, (_) => _updateFileList());
     _updateFileList(); // Initial load
 
@@ -48,7 +46,7 @@ class HomeController extends GetxController {
     });
   }
 
-  // **NEW:** Method to update the file list based on the toggle.
+  //  Method to update the file list based on the toggle.
   void _updateFileList() async {
     if (showFailedOnly.value) {
       allFiles.value = await _dbService.getFilesByStatus(FileStatus.failed);
@@ -57,17 +55,17 @@ class HomeController extends GetxController {
     }
   }
 
-  // **NEW:** Method to toggle the file list view.
+  //Method to toggle the file list view.
   void toggleShowFailedOnly() {
     showFailedOnly.value = !showFailedOnly.value;
   }
 
-  // **NEW:** Handles the re-upload of failed files.
+  //  Handles the re-upload of failed files.
   void handleReuploadFailed() {
     _uploadManagerService.reuploadFailedFiles();
   }
 
-  // **NEW:** Handles the deletion of all files from the database.
+  //  Handles the deletion of all files from the database.
   void handleDeleteAllFiles() {
     _dbService.deleteAllFiles();
     Get.snackbar('Files Deleted', 'All tracked files have been removed from the list.');

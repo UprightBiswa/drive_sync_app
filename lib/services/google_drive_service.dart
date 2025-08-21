@@ -229,7 +229,7 @@ class GoogleDriveService {
   final GoogleSignIn _googleSignIn = GoogleSignIn(
     scopes: [
       'email',
-      'https://www.googleapis.com/auth/drive.file', // mandatory for file uploads
+      'https://www.googleapis.com/auth/drive.file', 
     ],
     clientId:
         '868153586645-qrqrm6edsnfpj90jj4k729hrr0nnvra9.apps.googleusercontent.com',
@@ -247,7 +247,7 @@ class GoogleDriveService {
     _googleSignIn.onCurrentUserChanged.listen((account) {
       currentUser.value = account;
     });
-    _googleSignIn.signInSilently(); // silent sign-in if possible
+    _googleSignIn.signInSilently();
   }
 
   Future<void> signIn() async {

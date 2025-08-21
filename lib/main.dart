@@ -12,19 +12,15 @@ import 'package:drive_sync_app/utils/app_theme.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
-  // Ensure Flutter bindings are initialized
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize background service
   await BackgroundService.initialize();
 
-  // Initialize all GetX services
   await initServices();
 
   runApp(const MyApp());
 }
 
-// Dependency injection for all our services
 Future<void> initServices() async {
   Get.put(PermissionService());
   await Get.putAsync(() => NotificationService().init());

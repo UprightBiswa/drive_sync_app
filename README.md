@@ -53,4 +53,3 @@ This app requires Google Drive API credentials to function.
     * The app will automatically start uploading files in the background, 4 at a time.
     * Even if you close the app, the `workmanager` will trigger an upload cycle approximately every 15 minutes.
 
-*/

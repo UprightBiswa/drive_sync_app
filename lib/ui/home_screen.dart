@@ -1,6 +1,4 @@
-// =============================================================
-// FILE: lib/ui/home_screen.dart
-// =============================================================
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:drive_sync_app/controllers/home_controller.dart';
@@ -44,7 +42,7 @@ class HomeScreen extends StatelessWidget {
             const SizedBox(height: 16),
             _buildActivityIndicator(),
             const SizedBox(height: 16),
-            // **NEW:** Header for the file list with a toggle button.
+            //  Header for the file list with a toggle button.
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -179,7 +177,7 @@ class HomeScreen extends StatelessWidget {
             backgroundColor: AppColors.accent,
           ),
           const SizedBox(height: 16),
-          // **NEW:** Button to re-upload failed files.
+          // Button to re-upload failed files.
           ActionButton(
             label: 'Re-upload Failed Files',
             icon: Icons.refresh,
@@ -188,7 +186,7 @@ class HomeScreen extends StatelessWidget {
             backgroundColor: AppColors.warning,
           ),
           const SizedBox(height: 16),
-          // **NEW:** Button to delete all files.
+          //  Button to delete all files.
           ActionButton(
             label: 'Delete All Files',
             icon: Icons.delete_forever,

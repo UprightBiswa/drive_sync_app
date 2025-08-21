@@ -1,6 +1,4 @@
-// =============================================================
-// FILE: lib/services/background_service.dart
-// =============================================================
+
 import 'package:workmanager/workmanager.dart';
 import 'package:get/get.dart';
 import 'package:drive_sync_app/services/database_service.dart';

@@ -30,4 +30,23 @@ class TrackedFile {
       createdAt: DateTime.parse(json['createdAt']),
     );
   }
+  //from map
+  factory TrackedFile.fromMap(Map<String, dynamic> map) {
+    return TrackedFile(
+      id: map['id'],
+      path: map['path'],
+      status: FileStatus.values.firstWhere((e) => e.toString() == map['status']),
+      createdAt: DateTime.parse(map['createdAt']),
+    );
+  }
+
+  //tomap
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'path': path,
+      'status': status.toString(),
+      'createdAt': createdAt.toIso8601String(),
+    };
+  }
 }
