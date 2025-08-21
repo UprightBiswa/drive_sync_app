@@ -42,4 +42,6 @@ class BackgroundService {
       constraints: Constraints(networkType: NetworkType.connected),
     );
   }
+
+  //
 }

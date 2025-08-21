@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:get/get.dart';
 import 'package:pool/pool.dart';
+
 import 'package:drive_sync_app/models/tracked_file.dart';
 import 'package:drive_sync_app/services/database_service.dart';
 import 'package:drive_sync_app/services/google_drive_service.dart';
@@ -11,103 +13,105 @@ class UploadManagerService {
   final GoogleDriveService _driveService = Get.find();
 
   final RxBool isUploading = false.obs;
-  final _pool = Pool(8); // 8 concurrent uploads
-  final int maxRetry = 3; // Retry failed uploads up to 3 times
-
-  /// Stream for progress updates
+  final RxBool _cancelRequested = false.obs;
   final RxInt uploadedCount = 0.obs;
   final RxInt totalFiles = 0.obs;
 
-  /// Main method to start upload queue
+  // Concurrency: max 6 uploads at once
+  final Pool _pool = Pool(6);
+
+  static const int _maxRetry = 3;
+  static const Duration _baseBackoff = Duration(seconds: 2);
+
+  /// Upload queue runner
   Future<int> processUploadQueue() async {
-    if (isUploading.value || _driveService.currentUser.value == null) {
-      debugPrint("Upload skipped: already running or not signed in.");
-      return 0;
-    }
+    if (isUploading.value) return 0;
+    if (_driveService.currentUser.value == null) return 0;
 
     isUploading.value = true;
+    _cancelRequested.value = false;
     uploadedCount.value = 0;
 
-    final pendingFiles = await _dbService.getFilesByStatus(FileStatus.pending);
-    totalFiles.value = pendingFiles.length;
-
-    if (pendingFiles.isEmpty) {
-      debugPrint("No pending files to upload.");
-      isUploading.value = false;
-      return 0;
-    }
-
-    debugPrint("Starting upload for ${pendingFiles.length} files.");
-
-    int successCount = 0;
-
     try {
-      // Use pool for parallel uploads, offloaded to isolates
-      await for (final success in _pool.forEach(
-        pendingFiles,
-        (file) => _uploadFileInIsolate(file),
-      )) {
+      final pending = await _dbService.getFilesByStatus(FileStatus.pending);
+      if (pending.isEmpty) return 0;
+
+      totalFiles.value = pending.length;
+      int successCount = 0;
+
+      // Run uploads in parallel
+      await for (final success in _pool.forEach(pending, _uploadOne)) {
         if (success) successCount++;
         uploadedCount.value++;
+        if (_cancelRequested.value) break;
       }
+
+      return successCount;
     } catch (e, s) {
-      debugPrint("Error in upload queue: $e\n$s");
+      debugPrint("Upload queue error: $e\n$s");
+      return 0;
     } finally {
       isUploading.value = false;
-      debugPrint("Upload finished. Success: $successCount / ${pendingFiles.length}");
     }
-
-    return successCount;
   }
 
-  /// Re-upload failed files
   Future<void> reuploadFailedFiles() async {
-    final failedFiles = await _dbService.getFilesByStatus(FileStatus.failed);
-    for (var file in failedFiles) {
-      await _dbService.updateFileStatus(file.id, FileStatus.pending);
+    final failed = await _dbService.getFilesByStatus(FileStatus.failed);
+    for (final f in failed) {
+      await _dbService.updateFileStatus(f.id, FileStatus.pending);
     }
     await processUploadQueue();
   }
 
-  /// Upload a single file in a separate isolate
-  Future<bool> _uploadFileInIsolate(TrackedFile trackedFile) async {
-    return compute(_uploadSingleFileIsolate, trackedFile.toMap());
+  void cancelCurrentUploads() {
+    _cancelRequested.value = true;
   }
-}
 
-/// Top-level function to run in isolate
-Future<bool> _uploadSingleFileIsolate(Map<String, dynamic> fileMap) async {
-  final dbService = Get.find<DatabaseService>();
-  final driveService = Get.find<GoogleDriveService>();
+  /// Upload one file with retry
+  Future<bool> _uploadOne(TrackedFile tracked) async {
+    if (_cancelRequested.value) return false;
 
-  final trackedFile = TrackedFile.fromMap(fileMap);
-  int attempt = 0;
-  while (attempt < 3) {
-    attempt++;
-    try {
-      await dbService.updateFileStatus(trackedFile.id, FileStatus.uploading);
+    await _safeSetStatus(tracked.id, FileStatus.uploading);
 
-      final file = File(trackedFile.path);
-      if (!await file.exists()) {
-        await dbService.updateFileStatus(trackedFile.id, FileStatus.failed);
-        return false;
+    final file = File(tracked.path);
+    if (!await file.exists()) {
+      await _safeSetStatus(tracked.id, FileStatus.failed);
+      return false;
+    }
+
+    int attempt = 0;
+    while (attempt < _maxRetry && !_cancelRequested.value) {
+      attempt++;
+      try {
+        if (_driveService.currentUser.value == null) {
+          await _safeSetStatus(tracked.id, FileStatus.pending);
+          return false;
+        }
+
+        final ok = await _driveService.uploadFile(file);
+        if (ok) {
+          await _safeSetStatus(tracked.id, FileStatus.completed);
+          return true;
+        }
+      } catch (e) {
+        debugPrint("Upload error for ${tracked.path} attempt $attempt: $e");
       }
 
-      final success = await driveService.uploadFile(file);
-
-      await dbService.updateFileStatus(
-        trackedFile.id,
-        success ? FileStatus.completed : FileStatus.failed,
-      );
-
-      if (success) return true;
-    } catch (e, s) {
-      debugPrint("Error uploading ${trackedFile.path} (attempt $attempt): $e\n$s");
-      if (attempt >= 3) {
-        await dbService.updateFileStatus(trackedFile.id, FileStatus.failed);
-        return false;
+      if (attempt < _maxRetry) {
+        final delay = _baseBackoff * (1 << (attempt - 1)); // 2s,4s,8s
+        await Future.delayed(delay);
       }
     }
+
+    await _safeSetStatus(tracked.id, FileStatus.failed);
+    return false;
   }
-  return false;
+
+  Future<void> _safeSetStatus(int id, FileStatus status) async {
+    try {
+      await _dbService.updateFileStatus(id, status);
+    } catch (e) {
+      debugPrint("DB update error for $id -> $status: $e");
+    }
+  }
 }
